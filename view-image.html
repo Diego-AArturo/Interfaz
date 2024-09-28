@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AGROPLAGAS AI</title>
+    <link rel="icon" type="image/png" href="Interfaz\icon.png">
+
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Vista previa de la Imagen</h1>
+        <!-- Imagen cargada -->
+        <div style="position: relative;">
+            <img id="previewImage" src="" alt="Imagen Subida" style="display: block;">
+            <!-- Canvas donde se dibujará el boundingBox -->
+            <canvas id="imageCanvas" style="position: absolute; top: 0; left: 0;"></canvas>
+        </div>
+        
+        <div class="button-group">
+            <button onclick="storeImage()">Almacenar</button>
+            <button onclick="goBack()">Regresar</button>
+            <button onclick="proccesImage()">Procesar</button>
+        </div>
+    </div>
+    
+    <script>
+        // Mostrar la imagen almacenada en sessionStorage
+        const uploadedImage = sessionStorage.getItem('uploadedImage');
+        if (uploadedImage) {
+            const imgElement = document.getElementById('previewImage');
+            imgElement.src = uploadedImage;
+
+            // Ajustar el tamaño del canvas al tamaño de la imagen visible tras el escalado
+            imgElement.onload = function() {
+                adjustCanvasSize();
+            };
+        }
+
+        function adjustCanvasSize() {
+            const imgElement = document.getElementById('previewImage');
+            const canvas = document.getElementById('imageCanvas');
+
+            // Asegurar que el canvas tenga las mismas dimensiones que la imagen escalada
+            canvas.width = imgElement.clientWidth;
+            canvas.height = imgElement.clientHeight;
+        }
+
+        function storeImage() {
+            alert('Imagen almacenada con éxito!');
+        }
+
+        function goBack() {
+            window.location.href = 'index.html';
+        }
+
+        function proccesImage() {
+            const uploadedImage = sessionStorage.getItem('uploadedImage');
+            
+            if (!uploadedImage) {
+                alert('No hay imagen cargada para procesar');
+                return;
+            }
+            
+            // Convertir la imagen almacenada en sessionStorage a un Blob para enviarla
+            const byteString = atob(uploadedImage.split(',')[1]);
+            const mimeString = uploadedImage.split(',')[0].split(':')[1].split(';')[0];
+
+            const arrayBuffer = new ArrayBuffer(byteString.length);
+            const uintArray = new Uint8Array(arrayBuffer);
+
+            for (let i = 0; i < byteString.length; i++) {
+                uintArray[i] = byteString.charCodeAt(i);
+            }
+
+            const blob = new Blob([arrayBuffer], { type: mimeString });
+
+            // URL de Azure Custom Vision API y clave de predicción
+            const url = 'https://compunubevision-prediction.cognitiveservices.azure.com/customvision/v3.0/Prediction/071b13bd-9682-49a9-88fd-5e0ab6921c22/detect/iterations/WormsDetect/image';
+            const predictionKey = '6ea76f48daa5485eb4acdf443406be97';
+
+            // Configuración de la solicitud
+            const requestOptions = {
+                method: 'POST',
+                headers: {
+                    'Prediction-Key': predictionKey,
+                    'Content-Type': 'application/octet-stream'
+                },
+                body: blob
+            };
+
+            // Realizar la solicitud a la API
+            fetch(url, requestOptions)
+                .then(response => response.json())
+                .then(result => {
+                    console.log('Resultado de la predicción:', result);
+                    if (result.predictions.length > 0) {
+                        // Dibujar un boundingBox para cada predicción
+                        drawBoundingBoxes(result.predictions);
+                    } else {
+                        alert('No se encontraron gusanos en la imagen.');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error al procesar la imagen:', error);
+                    alert('Error al procesar la imagen.');
+                });
+        }
+
+        // Dibujar todos los bounding boxes de las predicciones
+        function drawBoundingBoxes(predictions) {
+            const canvas = document.getElementById('imageCanvas');
+            const ctx = canvas.getContext('2d');
+            const imgElement = document.getElementById('previewImage');
+
+            // Limpiar canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Iterar sobre cada predicción y dibujar su bounding box
+            
+            predictions.forEach(prediction => {
+        if (prediction.probability > 0.5) {  // Verificar si la probabilidad es mayor a 0.5
+            const boundingBox = prediction.boundingBox;
+            
+            // Convertir porcentajes a valores en píxeles basados en el tamaño visible de la imagen
+            const x = boundingBox.left * imgElement.clientWidth;
+            const y = boundingBox.top * imgElement.clientHeight;
+            const width = boundingBox.width * imgElement.clientWidth;
+            const height = boundingBox.height * imgElement.clientHeight;
+
+            // Dibujar el rectángulo del boundingBox
+            ctx.strokeStyle = 'red';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(x, y, width, height);
+        }
+    });
+}
+    </script>
+</body>
+</html>
+
+
+
+
